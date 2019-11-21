@@ -8,7 +8,7 @@ public class Main {
 
     LogicalDumper d = new LogicalDumper(originRoot, destRoot);
 
-    d.backup();
+    d.dump();
 
     }
 

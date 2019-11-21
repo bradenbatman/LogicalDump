@@ -4,6 +4,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
+import java.util.Objects;
 
 class LogicalDumper {
     private final SimpleDateFormat sdf = new SimpleDateFormat("MM-dd-yyyy HHmmss");
@@ -11,35 +12,39 @@ class LogicalDumper {
     private File destRoot;
     private File mostRecentBackupRoot;
 
+    //constructor sets originRoot and destRoot variables
     LogicalDumper(File orig, File dest){
         setOriginRoot(orig);
         setDestRoot(dest);
     }
 
-    /*public File getOriginRoot() { return originRoot; }*/
+    //setter for originRoot
+    private void setOriginRoot(File originRoot) { this.originRoot = originRoot; }
 
-    /*public File getDestRoot() { return destRoot; }*/
+    //setter for destRoot
+    private void setDestRoot(File destRoot) { this.destRoot = destRoot; }
 
-    public void setOriginRoot(File originRoot) { this.originRoot = originRoot; }
-
-    public void setDestRoot(File destRoot) { this.destRoot = destRoot; }
-
-    void backup(){
+    //Function performs an initial, full, dump if there are no existing backups.
+    //If there are existing backups, run an incremental backup.
+    void dump(){
+        //Path for the backup to go in. (original file name + current date and time)
         Path destDirectory = Paths.get(destRoot +"/"+originRoot.getName()+ " " + sdf.format(destRoot.lastModified()));
 
+        //if there is an existing backup, set mostRecentBackupRoot to the most recently modified backup.
+        //process an incremental dump
         if(backupExists()){
             mostRecentBackupRoot = getRecentBackup();
-            previousBackupDump(originRoot, destDirectory, mostRecentBackupRoot.toPath());
+            incrementalDump(originRoot, destDirectory);
         }
+        //else this is the the first dump so process an initial dump.
         else{
             initialDump(originRoot, destDirectory);
         }
     }
 
+    //For each file in the destRoot, return true if they have the name of the originRoot (they are a backup), else return false.
     private boolean backupExists(){
-        File[] destDirectories = destRoot.listFiles();
-
-        for (File f: destDirectories) {
+        for (File f: Objects.requireNonNull(destRoot.listFiles())) {
             if (f.getName().contains(originRoot.getName())){
                 return true;
             }
@@ -47,12 +52,11 @@ class LogicalDumper {
         return false;
     }
 
+    //For each file in the destRoot that is a backup, compare last modified time and return the most recent backup.
     private File getRecentBackup(){
         File newest = originRoot;
-        String partialName = originRoot.getName();
-
-        for(File f: destRoot.listFiles()){
-            if (f.getName().contains(partialName)){
+        for(File f: Objects.requireNonNull(destRoot.listFiles())){
+            if (f.getName().contains(originRoot.getName())){
                 if (f.lastModified() > newest.lastModified()){
                     newest = f;
                 }
@@ -61,70 +65,46 @@ class LogicalDumper {
         return newest;
     }
 
-    private void previousBackupDump(File source, Path target, Path recentBackupSource) {
-        //if the recentBackupSource file exists
-        //if the source file is newer than the recentBackupSource file, copy source file to target
-        //else dont copy it
-        //if the recentBackupSource file doesnt exist
-        //if the source file is newer than the recentBackupSource root, copy source file to target
-        //only call this method on files
-
-        if(recentBackupSource.toFile().exists()){
-            if (source.lastModified() > recentBackupSource.toFile().lastModified()){
-                System.out.println("File in previous backup copied again: " + source);
-                try {
-                    createPath(source.toPath(), target);
-                    Files.copy(source.toPath(), target);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            else{
-                System.out.println("File in previous backup not copied: " + source);
-            }
-        }
-        else{
-            System.out.println(source.lastModified() +" + "+ mostRecentBackupRoot.lastModified());
-            if (source.lastModified() > mostRecentBackupRoot.lastModified()){
-                System.out.println("File not in previous backup copied again: " + source);
-                try {
-                    Files.copy(source.toPath(), target);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-            }
-            else{
-                System.out.println("File not in previous backup not copied: " + source);
+    //this recursive function is run on every file in the source folder and if the file had been modified since the last backup,
+    //the file is backed up.
+    private void incrementalDump(File source, Path target) {
+        //If the source file has been modified since the last backup, make sure the path to it exists and copy it over.
+        if(source.lastModified() > mostRecentBackupRoot.lastModified()){
+            try {
+                createPath(source.toPath(), target);
+                Files.copy(source.toPath(), target);
+                System.out.println("Incremental Dump: " + target);
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
 
-        //If the file is a directory call this function on all of it's subfiles.
+        //If the file is a directory, call this function on it's children files.
         if(source.isDirectory()) {
-            for (File f : source.listFiles()) {
-                previousBackupDump(f, Paths.get(target+"/"+f.getName()), Paths.get(recentBackupSource +"/"+f.getName()));
+            for (File f : Objects.requireNonNull(source.listFiles())) {
+                incrementalDump(f, Paths.get(target+"/"+f.getName()));
             }
         }
 
     }
 
+    //This recursive function is called on every file in the source directory and copies over the file to the proper destination directory location.
     private void initialDump(File source, Path target){
         try {
-            System.out.println("Initial Dump: " + source);
             Files.copy(source.toPath(), target);
+            System.out.println("Initial Dump: " + target);
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        //If the file is a directory call this function on all of it's subfiles.
+        //If the file is a directory, call this function on it's children files.
         if(source.isDirectory()) {
-            for (File f : source.listFiles()) {
+            for (File f : Objects.requireNonNull(source.listFiles())) {
                 initialDump(f, Paths.get(target +"/"+f.getName()));
             }
         }
     }
 
-    /*Ensures that the parent folder and path exists for target
-    by recursively copying over the parent folders until the path exists.*/
     private void createPath(Path source, Path target){
         Path sourceParent = source.getParent();
         Path targetParent = target.getParent();
@@ -137,6 +117,7 @@ class LogicalDumper {
             try {
                 //copy the sourceParent to targetParent
                 Files.copy(sourceParent, targetParent);
+                System.out.println("Path created: " + targetParent);
             } catch (IOException e) {
                 e.printStackTrace();
             }
