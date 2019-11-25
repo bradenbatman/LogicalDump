@@ -12,6 +12,9 @@ class LogicalDumper {
     private File destRoot;
     private File mostRecentBackupRoot;
 
+    //This boolean is to track whether any files were copied.
+    private boolean wasCopied = false;
+
     //constructor sets originRoot and destRoot variables
     LogicalDumper(File orig, File dest){
         setOriginRoot(orig);
@@ -33,13 +36,24 @@ class LogicalDumper {
         //if there is an existing backup, set mostRecentBackupRoot to the most recently modified backup.
         //process an incremental dump
         if(backupExists()){
+            System.out.println("Processing incremental dump...");
             mostRecentBackupRoot = getRecentBackup();
             incrementalDump(originRoot, destDirectory);
         }
         //else this is the the first dump so process an initial dump.
         else{
+            System.out.println("Processing initial dump...");
             initialDump(originRoot, destDirectory);
         }
+
+        System.out.println("Backup complete...");
+        if (wasCopied){
+            System.out.println("Files backed up to: "+ destDirectory);
+        }
+        else{
+            System.out.println("No files were backed up.");
+        }
+
     }
 
     //For each file in the destRoot, return true if they have the name of the originRoot (they are a backup), else return false.
@@ -65,15 +79,12 @@ class LogicalDumper {
         return newest;
     }
 
-    //this recursive function is run on every file in the source folder and if the file had been modified since the last backup,
-    //the file is backed up.
+    //this recursive function is run on every file in the source folder and if the file had been modified since the last backup, the file is backed up.
     private void incrementalDump(File source, Path target) {
         //If the source file has been modified since the last backup, make sure the path to it exists and copy it over.
         if(source.lastModified() > mostRecentBackupRoot.lastModified()){
             try {
-                createPath(source.toPath(), target);
-                Files.copy(source.toPath(), target);
-                System.out.println("Incremental Dump: " + target);
+                copy(source.toPath(), target);
             } catch (IOException e) {
                 e.printStackTrace();
             }
@@ -91,8 +102,7 @@ class LogicalDumper {
     //This recursive function is called on every file in the source directory and copies over the file to the proper destination directory location.
     private void initialDump(File source, Path target){
         try {
-            Files.copy(source.toPath(), target);
-            System.out.println("Initial Dump: " + target);
+            copy(source.toPath(), target);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -103,6 +113,15 @@ class LogicalDumper {
                 initialDump(f, Paths.get(target +"/"+f.getName()));
             }
         }
+    }
+
+    private void copy(Path source, Path target) throws IOException {
+        //Ensures that the path to this file exists, important for the incremental dump
+        createPath(source, target);
+
+        Files.copy(source, target);
+        System.out.println("Backed up: " + source);
+        wasCopied = true;
     }
 
     private void createPath(Path source, Path target){
@@ -116,8 +135,7 @@ class LogicalDumper {
             //execution will proceed to this point once it is certain that the file we're about to copy has an existing path.
             try {
                 //copy the sourceParent to targetParent
-                Files.copy(sourceParent, targetParent);
-                System.out.println("Path created: " + targetParent);
+                copy(sourceParent, targetParent);
             } catch (IOException e) {
                 e.printStackTrace();
             }

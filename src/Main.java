@@ -2,13 +2,24 @@ import java.io.File;
 
 public class Main {
     public static void main(String[] args) {
+        System.out.println("Beginning execution of logical dump system...");
 
-    File originRoot = new File(Config.getProperty("o"));
-    File destRoot = new File(Config.getProperty("d"));
+        //Root directory of the origin and destination locations
+        File originRoot = null;
+        File destRoot = null;
 
-    LogicalDumper d = new LogicalDumper(originRoot, destRoot);
+        try {
+            originRoot = new File(Config.getProperty("o"));
+            destRoot = new File(Config.getProperty("d"));
+        } catch (NullPointerException e) {
+            System.out.println("ERROR: Config file was not set up properly, ending program.");
+            System.exit(0);
+        }
 
-    d.dump();
+        LogicalDumper d = new LogicalDumper(originRoot, destRoot);
+
+        System.out.println("Starting backup...");
+        d.dump();
 
     }
 
